@@ -43,11 +43,11 @@ typedef struct{
 	char name[MAX_NAME_LEN];
 	int name_len;
 	struct nk_color color;
-	int position;
 } polygon;
 
-#define MAX_POLYGONS 5
+#define MAX_POLYGONS 128
 int active_polygons;
+int total_created;
 polygon polygon_list[MAX_POLYGONS];
 polygon * sorted_polygon_list[MAX_POLYGONS];
 
@@ -62,12 +62,12 @@ void init_polygons(){
 		polygon_list[i].show = 1;
 		polygon_list[i].name_len = strlen(polygon_list[i].name);
 		polygon_list[i].color = nk_rgba(0, 255, 255, 255);
-		polygon_list[i].position = i;
 		
 		sorted_polygon_list[i] = &polygon_list[i];
 	}
 	
 	active_polygons = 0;
+	total_created = 1;
 	
 }
 
@@ -151,8 +151,10 @@ main(int argc, char* argv[])
             
             nk_layout_row_static(ctx, 30, 80, 1);
             if (nk_button_label(ctx, "add path"))
-                if (active_polygons < MAX_POLYGONS - 1)
+                if (active_polygons < MAX_POLYGONS - 1){
 					active_polygons++;
+					total_created++;
+				}
             
             
             // separator hack
@@ -178,24 +180,39 @@ main(int argc, char* argv[])
 				nk_button_color(ctx, sorted_polygon_list[i]->color);
 				
 				nk_layout_row_dynamic(ctx, 30, 4);
-				if (nk_button_label(ctx, "up") && sorted_polygon_list[i]->position != active_polygons){
-					sorted_polygon_list[i]->position++;
-					sorted_polygon_list[i+1]->position--;
-					
+				if (nk_button_label(ctx, "up") && i != active_polygons){					
 					polygon * tmp = sorted_polygon_list[i];
 					sorted_polygon_list[i] = sorted_polygon_list[i+1];
 					sorted_polygon_list[i+1] = tmp;
 				}
-				if (nk_button_label(ctx, "down") && sorted_polygon_list[i]->position != 0){
-					sorted_polygon_list[i]->position--;
-					sorted_polygon_list[i-1]->position++;
-					
+				if (nk_button_label(ctx, "down") && i != 0){					
 					polygon * tmp = sorted_polygon_list[i];
 					sorted_polygon_list[i] = sorted_polygon_list[i-1];
 					sorted_polygon_list[i-1] = tmp;
 				}
 				nk_spacing(ctx, 1);
-				nk_button_label(ctx, "delete");
+				if (nk_button_label(ctx, "delete")){
+					
+					int j;
+					polygon * tmp = sorted_polygon_list[i];
+					// I call it "One inch... to the left!"
+					for(j = i; j < MAX_POLYGONS - 1; j++)
+						sorted_polygon_list[j] = sorted_polygon_list[j + 1];
+					
+					// re-cap with defaults
+					int end = MAX_POLYGONS - 1;
+					sorted_polygon_list[end] = tmp;
+					
+					memset(sorted_polygon_list[end]->name, 0, MAX_NAME_LEN);
+					sprintf(sorted_polygon_list[end]->name, "unnamed_%03d", total_created);
+					
+					sorted_polygon_list[end]->show = 1;
+					sorted_polygon_list[end]->name_len = strlen(sorted_polygon_list[end]->name);
+					sorted_polygon_list[end]->color = nk_rgba(0, 255, 255, 255);
+					
+					active_polygons--;
+					
+				}
 				
 				// separator hack
 				nk_layout_row_dynamic(ctx, 2, 1);
