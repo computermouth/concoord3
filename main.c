@@ -242,7 +242,7 @@ main(int argc, char* argv[])
         }
         nk_end(ctx);
         
-        if (nk_begin(ctx, "top panel", nk_rect(300 + 4, 5, resized_width - 300 - 8, 30),
+        if (nk_begin(ctx, "top panel", nk_rect(300 + 4, 5, resized_width - 300 - 9, 30),
 			NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR))
         {
 			char tmp_str[MAX_STR_LEN];
@@ -259,7 +259,7 @@ main(int argc, char* argv[])
         }
         nk_end(ctx);
         
-        if (nk_begin(ctx, "canvas", nk_rect(300 + 4, 30 + 11, resized_width - 300 - 8, resized_height - 46),
+        if (nk_begin(ctx, "canvas", nk_rect(300 + 4, 30 + 11, resized_width - 300 - 9, resized_height - 46),
 			NK_WINDOW_BORDER))
         {
             
