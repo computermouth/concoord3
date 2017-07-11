@@ -37,26 +37,32 @@
 #define MAX(a,b) ((a) < (b) ? (b) : (a))
 #define LEN(a) (sizeof(a)/sizeof(a)[0])
 
-#define MAX_NAME_LEN 128
+#define MAX_STR_LEN 128
+#define MAX_POLYGONS 128
+#define X_PAD 4
+#define Y_PAD 5
+
 typedef struct{
 	int show;
-	char name[MAX_NAME_LEN];
+	char name[MAX_STR_LEN];
 	int name_len;
 	struct nk_color color;
 } polygon;
 
-#define MAX_POLYGONS 128
 int active_polygons;
 int total_created;
 polygon polygon_list[MAX_POLYGONS];
 polygon * sorted_polygon_list[MAX_POLYGONS];
+
+int resized_height = WINDOW_HEIGHT;
+int resized_width = WINDOW_WIDTH;
 
 void init_polygons(){
 	
 	int i;
 	for(i = 0; i < MAX_POLYGONS; i++){
 	
-		memset(polygon_list[i].name, 0, MAX_NAME_LEN);
+		memset(polygon_list[i].name, 0, MAX_STR_LEN);
 		sprintf(polygon_list[i].name, "unnamed_%03d", i);
 		
 		polygon_list[i].show = 1;
@@ -67,7 +73,7 @@ void init_polygons(){
 	}
 	
 	active_polygons = 0;
-	total_created = 1;
+	total_created = 0;
 	
 }
 
@@ -94,7 +100,7 @@ main(int argc, char* argv[])
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     win = SDL_CreateWindow("Demo",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN|SDL_WINDOW_ALLOW_HIGHDPI);
+        WINDOW_WIDTH, WINDOW_HEIGHT, SDL_WINDOW_OPENGL|SDL_WINDOW_SHOWN|SDL_WINDOW_ALLOW_HIGHDPI|SDL_WINDOW_RESIZABLE);
     glContext = SDL_GL_CreateContext(win);
     SDL_GetWindowSize(win, &win_width, &win_height);
 
@@ -115,7 +121,7 @@ main(int argc, char* argv[])
     
     init_polygons();	
 	
-    background = nk_rgb(28,48,62);
+    background = nk_rgb(48,86,111);
         
     while (running)
     {
@@ -127,11 +133,13 @@ main(int argc, char* argv[])
             nk_sdl_handle_event(&evt);
         }
         nk_input_end(ctx);
+        
+        SDL_GetWindowSize(win, &resized_width, &resized_height);
 
 
-        /* GUI */
-        if (nk_begin(ctx, "New", nk_rect(0, 0, 300, 768),
-            NK_WINDOW_TITLE))
+        /* Left panel GUI */
+        if (nk_begin(ctx, "New", nk_rect(4, 5, 296, resized_height - (5 * 2)),
+            NK_WINDOW_TITLE|NK_WINDOW_BORDER))
         {
             nk_menubar_begin(ctx);
             nk_layout_row_begin(ctx, NK_STATIC, 25, 2);
@@ -154,13 +162,20 @@ main(int argc, char* argv[])
                 if (active_polygons < MAX_POLYGONS - 1){
 					active_polygons++;
 					total_created++;
+					
+					memset(sorted_polygon_list[active_polygons]->name, 0, MAX_STR_LEN);
+					sprintf(sorted_polygon_list[active_polygons]->name, "unnamed_%03d", total_created);
+					
+					sorted_polygon_list[active_polygons]->show = 1;
+					sorted_polygon_list[active_polygons]->name_len = strlen(sorted_polygon_list[active_polygons]->name);
+					sorted_polygon_list[active_polygons]->color = nk_rgba(0, 255, 255, 255);
 				}
             
             
             // separator hack
 			nk_layout_row_dynamic(ctx, 2, 1);
 			nk_spacing(ctx, 1);
-			nk_layout_row_dynamic(ctx, 10, 1);
+			nk_layout_row_dynamic(ctx, 5, 1);
 			nk_size cur = 1;
 			nk_progress(ctx, &cur, 1, 0);
 			nk_layout_row_dynamic(ctx, 2, 1);
@@ -171,7 +186,7 @@ main(int argc, char* argv[])
 				
 				nk_layout_row_dynamic(ctx, 30, 2);
 				nk_checkbox_label(ctx, "show", &sorted_polygon_list[i]->show);
-				nk_edit_string(ctx, NK_EDIT_FIELD, sorted_polygon_list[i]->name, &sorted_polygon_list[i]->name_len, MAX_NAME_LEN, nk_filter_ascii);
+				nk_edit_string(ctx, NK_EDIT_FIELD, sorted_polygon_list[i]->name, &sorted_polygon_list[i]->name_len, MAX_STR_LEN, nk_filter_ascii);
 				
 				nk_layout_row_dynamic(ctx, 30, 4);
 				sorted_polygon_list[i]->color.r = (nk_byte)nk_propertyi(ctx, "#", 0, sorted_polygon_list[i]->color.r, 255, 1,1);
@@ -203,7 +218,7 @@ main(int argc, char* argv[])
 					int end = MAX_POLYGONS - 1;
 					sorted_polygon_list[end] = tmp;
 					
-					memset(sorted_polygon_list[end]->name, 0, MAX_NAME_LEN);
+					memset(sorted_polygon_list[end]->name, 0, MAX_STR_LEN);
 					sprintf(sorted_polygon_list[end]->name, "unnamed_%03d", total_created);
 					
 					sorted_polygon_list[end]->show = 1;
@@ -217,7 +232,7 @@ main(int argc, char* argv[])
 				// separator hack
 				nk_layout_row_dynamic(ctx, 2, 1);
 				nk_spacing(ctx, 1);
-				nk_layout_row_dynamic(ctx, 10, 1);
+				nk_layout_row_dynamic(ctx, 5, 1);
 				nk_progress(ctx, &cur, 1, 0);
 				nk_layout_row_dynamic(ctx, 2, 1);
 				nk_spacing(ctx, 1);
@@ -226,6 +241,31 @@ main(int argc, char* argv[])
             
         }
         nk_end(ctx);
+        
+        if (nk_begin(ctx, "top panel", nk_rect(300 + 4, 5, resized_width - 300 - 8, 30),
+			NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR))
+        {
+			char tmp_str[MAX_STR_LEN];
+			sprintf(tmp_str, "polys: %03d / %03d", active_polygons, MAX_POLYGONS);
+			
+            nk_layout_row_dynamic(ctx, 20, 3);
+            nk_label(ctx, tmp_str, NK_TEXT_LEFT);
+			nk_spacing(ctx, 1);
+			
+			memset(tmp_str, 0, MAX_STR_LEN);
+			sprintf(tmp_str, "points: %03d / %03d", active_polygons, MAX_POLYGONS);
+			
+            nk_label(ctx, tmp_str, NK_TEXT_RIGHT);
+        }
+        nk_end(ctx);
+        
+        if (nk_begin(ctx, "canvas", nk_rect(300 + 4, 30 + 11, resized_width - 300 - 8, resized_height - 46),
+			NK_WINDOW_BORDER))
+        {
+            
+        }
+        nk_end(ctx);
+
 
         /* Draw */
         {float bg[4];
