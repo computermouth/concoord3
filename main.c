@@ -203,10 +203,13 @@ main(int argc, char* argv[])
 				}
 			}
 			
+			static int a[2] = {nk_true, nk_false};
+			
 			int i;
 			for(i = active_polygons; i >=0 ; i--) {
 				
-				if(nk_tree_push(ctx, NK_TREE_TAB, sorted_polygon_list[i]->name, sorted_polygon_list[i]->collapsed)){
+				//~ if(nk_tree_push(ctx, NK_TREE_TAB, sorted_polygon_list[i]->name, sorted_polygon_list[i]->collapsed)){
+				if(nk_tree_push(ctx, NK_TREE_TAB, sorted_polygon_list[i]->name, a[i])){
 				
 					float checkbox_ratio[] = {0.3f, 0.7f};
 					nk_layout_row(ctx, NK_DYNAMIC, 30, 2, checkbox_ratio);
@@ -272,6 +275,14 @@ main(int argc, char* argv[])
 				}
 			}
 			
+			if(nk_tree_push(ctx, NK_TREE_TAB, "borp", NK_MAXIMIZED)){
+			
+			nk_layout_row_dynamic(ctx, 20, 1);
+			nk_label(ctx, "beep", NK_TEXT_LEFT);
+			
+				nk_tree_pop(ctx);
+			}			
+
 		}
 		nk_end(ctx);
 		
