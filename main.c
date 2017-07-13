@@ -277,8 +277,8 @@ main(int argc, char* argv[])
 			
 			if(nk_tree_push(ctx, NK_TREE_TAB, "borp", NK_MAXIMIZED)){
 			
-			nk_layout_row_dynamic(ctx, 20, 1);
-			nk_label(ctx, "beep", NK_TEXT_LEFT);
+				nk_layout_row_dynamic(ctx, 20, 1);
+				nk_label(ctx, "beep", NK_TEXT_LEFT);
 			
 				nk_tree_pop(ctx);
 			}			
