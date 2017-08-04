@@ -38,50 +38,145 @@
 #define LEN(a) (sizeof(a)/sizeof(a)[0])
 
 #define MAX_STR_LEN 128
-#define MAX_POLYGONS 128
+#define MAX_POLYGONS 16
 #define X_PAD 4
 #define Y_PAD 5
 
-typedef struct{
+typedef struct {
 	int show;
 	char name[MAX_STR_LEN];
 	int name_len;
 	struct nk_color color;
 	int collapsed;
-	struct nk_rect bounds;
+	//~ struct nk_rect bounds;
+	int x;
+	int y;
+	int w;
+	int h;
 } polygon;
 
-int active_polygons;
-int total_created;
+int active_polygons = -1;
+int total_created = -1;
 polygon polygon_list[MAX_POLYGONS];
 // sorted_polygon_list
 polygon * spl[MAX_POLYGONS];
+void * held = NULL;
 
 int resized_height = WINDOW_HEIGHT;
 int resized_width = WINDOW_WIDTH;
 
 int default_collapsed = NK_MINIMIZED;
 
-void init_polygons(){
+void draw_polygon(struct nk_context *ctx, const struct nk_input *in, int i){
 	
-	int i;
-	for(i = 0; i < MAX_POLYGONS; i++){
+	struct nk_panel *node;
 	
-		memset(polygon_list[i].name, 0, MAX_STR_LEN);
-		sprintf(polygon_list[i].name, "unnamed_%03d", i);
+	nk_layout_space_push(ctx, nk_rect(spl[i]->x,
+		spl[i]->y, spl[i]->w, spl[i]->h));
+	
+	printf("%d %d %d %d\n", spl[i]->x,
+		spl[i]->y, spl[i]->w, spl[i]->h);
+
+	/* execute node window */
+	if (nk_group_begin(ctx, spl[i]->name, NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_BORDER))
+	{
+		/* always have last selected node on top */
+		node = nk_window_get_panel(ctx);
 		
-		polygon_list[i].show = 1;
-		polygon_list[i].name_len = strlen(polygon_list[i].name);
-		polygon_list[i].color = nk_rgba(0, 255, 255, 255);
-		polygon_list[i].collapsed = default_collapsed;
-		polygon_list[i].bounds = nk_rect(4, (220 * i + 4), 400, 160);
+		/* mark a group as held, if no other holds, and a group is clicked */
+		if (nk_input_is_mouse_hovering_rect(in, node->bounds) &&
+			nk_input_is_mouse_down(in, NK_BUTTON_LEFT)) {
+			// deny multiple drags
+			if ( held == NULL || held == spl[i] ){
+				held = spl[i];
+				//~ updated = spl[i];
+			}
+		}
 		
-		spl[i] = &polygon_list[i];
+		/* unmark if click released */
+		if (nk_input_mouse_clicked(in, NK_BUTTON_LEFT, node->bounds) &&
+			held == spl[i])
+		{
+			held = NULL;
+		}
+		
+		/* unmark if marked, but somehow the mouse is up */
+		if (! nk_input_is_mouse_down(in, NK_BUTTON_LEFT))
+			held = NULL;
+		
+		/* otherwise update group y position */
+		if ( held != NULL && held == spl[i]){
+			spl[i]->y += in->mouse.delta.y;
+		}
+		
+		/* ================= NODE CONTENT =====================*/
+		float checkbox_ratio[] = {0.3f, 0.7f};
+		nk_layout_row(ctx, NK_DYNAMIC, 30, 2, checkbox_ratio);
+		nk_checkbox_label(ctx, "show", &spl[i]->show);
+		nk_edit_string(ctx, NK_EDIT_FIELD, spl[i]->name, &spl[i]->name_len, MAX_STR_LEN, nk_filter_ascii);
+		
+		// clean polygon names
+		int j;
+		for(j = 0; j < spl[i]->name_len; j++){
+			if( ! isalpha(spl[i]->name[j]) &&
+				! isdigit(spl[i]->name[j]) && 
+				spl[i]->name[j] != '_' ){
+				
+				spl[i]->name[j] = '_';
+			}
+		}
+		// nk_edit_string values don't depend on the null terminator
+		spl[i]->name[spl[i]->name_len] = '\0';
+
+		nk_layout_row_dynamic(ctx, 30, 4);
+		spl[i]->color.r = (nk_byte)nk_propertyi(ctx, "#", 0, spl[i]->color.r, 255, 1,1);
+		spl[i]->color.g = (nk_byte)nk_propertyi(ctx, "#", 0, spl[i]->color.g, 255, 1,1);
+		spl[i]->color.b = (nk_byte)nk_propertyi(ctx, "#", 0, spl[i]->color.b, 255, 1,1);
+		nk_button_color(ctx, spl[i]->color);
+		
+		nk_layout_row_dynamic(ctx, 30, 4);
+		if (nk_button_label(ctx, "up") && i != active_polygons){
+			polygon * tmp = spl[i];
+			spl[i] = spl[i+1];
+			spl[i+1] = tmp;
+		}
+		if (nk_button_label(ctx, "down") && i != 0){
+			polygon * tmp = spl[i];
+			spl[i] = spl[i-1];
+			spl[i-1] = tmp;
+		}
+		nk_spacing(ctx, 1);
+		if (nk_button_label(ctx, "delete")){
+			
+			int j;
+			polygon * tmp = spl[i];
+			// I call it "One inch... to the left!"
+			for(j = i; j < MAX_POLYGONS - 1; j++)
+				spl[j] = spl[j + 1];
+			
+			// re-cap with defaults
+			int end = MAX_POLYGONS - 1;
+			spl[end] = tmp;
+			
+			memset(spl[end]->name, 0, MAX_STR_LEN);
+			sprintf(spl[end]->name, "unnamed_%03d", total_created);
+			
+			spl[end]->show = 1;
+			spl[end]->name_len = strlen(spl[end]->name);
+			spl[end]->color = nk_rgba(0, 255, 255, 255);
+			spl[end]->collapsed = default_collapsed;
+			//~ spl[end]->bounds = nk_rect(4, (220 * (end - 1) + 4), 180, 160);
+			spl[end]->x = 4;
+			spl[end]->x = (220 * (end - 1) + 4);
+			spl[end]->x = 180;
+			spl[end]->x = 160;
+			
+			active_polygons--;
+			
+		}
+		/* =============== END NODE CONTENT ===================*/
+		nk_group_end(ctx);
 	}
-	
-	active_polygons = 0;
-	total_created = 0;
-	
 }
 
 int
@@ -128,8 +223,6 @@ main(int argc, char* argv[])
 		nk_sdl_font_stash_end();
 	}
 	
-	init_polygons();
-	
 	background = nk_rgb(48,86,111);
 	
 	while (running)
@@ -161,7 +254,8 @@ main(int argc, char* argv[])
 				if (nk_menu_item_label(ctx, "close", NK_TEXT_LEFT))
 					goto cleanup;
 				if (nk_menu_item_label(ctx, "reset", NK_TEXT_LEFT))
-					init_polygons();
+					printf("reset\n");
+				//~ init_polygons();
 				nk_menu_end(ctx);
 			}
 			nk_layout_row_push(ctx, 45);
@@ -182,16 +276,31 @@ main(int argc, char* argv[])
 			nk_layout_row_push(ctx, 60);
 			if( nk_button_label(ctx, "+ path") ){
 				if (active_polygons < MAX_POLYGONS - 1){
+					
 					active_polygons++;
 					total_created++;
 					
+					spl[active_polygons] = &(polygon_list[active_polygons]);
+					
 					memset(spl[active_polygons]->name, 0, MAX_STR_LEN);
-					sprintf(spl[active_polygons]->name, "unnamed_%03d", total_created);
+					sprintf(spl[active_polygons]->name, "unnamed_%03d", total_created+1);
 					
 					spl[active_polygons]->show = 1;
 					spl[active_polygons]->name_len = strlen(spl[active_polygons]->name);
 					spl[active_polygons]->color = nk_rgba(0, 255, 255, 255);
-					spl[active_polygons]->bounds = nk_rect(4, (220 * (active_polygons - 1) + 4), 180, 160);
+					spl[active_polygons]->collapsed = default_collapsed;
+					spl[active_polygons]->x = 4;
+					spl[active_polygons]->y = (170 * active_polygons + 4);
+					spl[active_polygons]->w = 266;
+					spl[active_polygons]->h = 160;
+					//~ nk_rect(4, (170 * active_polygons + 4), 266, 160);
+					
+					printf("%d\n", spl[0]->x);
+					printf("%d\n", polygon_list[0].x);
+					
+					printf("%d\n", spl[0]->y);
+					printf("%d\n", polygon_list[0].y);
+					
 				}
 			}
 			nk_layout_row_end(ctx);
@@ -225,110 +334,9 @@ main(int argc, char* argv[])
 				for (y = (float)fmod(size.y, grid_size); y < size.h; y += grid_size)
 					nk_stroke_line(canvas, size.x, y+size.y, size.x+size.w, y+size.y, 1.0f, grid_color);
 				
-				struct nk_panel *node;
 				int i;
 				for(i = active_polygons; i >= 0 ; i--) {
-					nk_layout_space_push(ctx, nk_rect(spl[i]->bounds.x,
-						spl[i]->bounds.y, spl[i]->bounds.w, spl[i]->bounds.h));
-					
-					/* execute node window */
-					if (nk_group_begin(ctx, spl[i]->name, NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_BORDER))
-					{
-						/* always have last selected node on top */
-						node = nk_window_get_panel(ctx);
-						
-						static void * held = NULL;
-						
-						/* mark a group as held, if no other holds, and a group is clicked */
-						if (nk_input_is_mouse_hovering_rect(in, node->bounds) &&
-							nk_input_is_mouse_down(in, NK_BUTTON_LEFT)) {
-							// deny multiple drags
-							if ( held == NULL || held == &spl[i] ){
-								held = &spl[i];
-								//~ updated = spl[i];
-							}
-						}
-						
-						/* unmark if click released */
-						if (nk_input_mouse_clicked(in, NK_BUTTON_LEFT, node->bounds) &&
-							held == &spl[i])
-						{
-							held = NULL;
-						}
-						
-						/* unmark if marked, but somehow the mouse is up */
-						if (! nk_input_is_mouse_down(in, NK_BUTTON_LEFT))
-							held = NULL;
-						
-						/* otherwise update group y position */
-						if ( held != NULL && held == &spl[i]){
-							spl[i]->bounds.y += in->mouse.delta.y;
-						}
-						
-						/* ================= NODE CONTENT =====================*/
-						float checkbox_ratio[] = {0.3f, 0.7f};
-						nk_layout_row(ctx, NK_DYNAMIC, 30, 2, checkbox_ratio);
-						nk_checkbox_label(ctx, "show", &spl[i]->show);
-						nk_edit_string(ctx, NK_EDIT_FIELD, spl[i]->name, &spl[i]->name_len, MAX_STR_LEN, nk_filter_ascii);
-						
-						// clean polygon names
-						int j;
-						for(j = 0; j < spl[i]->name_len; j++){
-							if( ! isalpha(spl[i]->name[j]) &&
-								! isdigit(spl[i]->name[j]) && 
-								spl[i]->name[j] != '_' ){
-								
-								spl[i]->name[j] = '_';
-							}
-						}
-						// nk_edit_string values don't depend on the null terminator
-						spl[i]->name[spl[i]->name_len] = '\0';
-					
-						nk_layout_row_dynamic(ctx, 30, 4);
-						spl[i]->color.r = (nk_byte)nk_propertyi(ctx, "#", 0, spl[i]->color.r, 255, 1,1);
-						spl[i]->color.g = (nk_byte)nk_propertyi(ctx, "#", 0, spl[i]->color.g, 255, 1,1);
-						spl[i]->color.b = (nk_byte)nk_propertyi(ctx, "#", 0, spl[i]->color.b, 255, 1,1);
-						nk_button_color(ctx, spl[i]->color);
-						
-						nk_layout_row_dynamic(ctx, 30, 4);
-						if (nk_button_label(ctx, "up") && i != active_polygons){
-							polygon * tmp = spl[i];
-							spl[i] = spl[i+1];
-							spl[i+1] = tmp;
-						}
-						if (nk_button_label(ctx, "down") && i != 0){
-							polygon * tmp = spl[i];
-							spl[i] = spl[i-1];
-							spl[i-1] = tmp;
-						}
-						nk_spacing(ctx, 1);
-						if (nk_button_label(ctx, "delete")){
-							
-							int j;
-							polygon * tmp = spl[i];
-							// I call it "One inch... to the left!"
-							for(j = i; j < MAX_POLYGONS - 1; j++)
-								spl[j] = spl[j + 1];
-							
-							// re-cap with defaults
-							int end = MAX_POLYGONS - 1;
-							spl[end] = tmp;
-							
-							memset(spl[end]->name, 0, MAX_STR_LEN);
-							sprintf(spl[end]->name, "unnamed_%03d", total_created);
-							
-							spl[end]->show = 1;
-							spl[end]->name_len = strlen(spl[end]->name);
-							spl[end]->color = nk_rgba(0, 255, 255, 255);
-							spl[end]->collapsed = default_collapsed;
-							spl[end]->bounds = nk_rect(4, (220 * (end - 1) + 4), 180, 160);
-							
-							active_polygons--;
-							
-						}
-						/* =============== END NODE CONTENT ===================*/
-						nk_group_end(ctx);
-					}
+					draw_polygon(ctx, in, i);
 				}
 			}
 			nk_layout_space_end(ctx);
@@ -340,14 +348,14 @@ main(int argc, char* argv[])
 			NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR))
 		{
 			char tmp_str[MAX_STR_LEN];
-			sprintf(tmp_str, "polys: %03d / %03d", active_polygons, MAX_POLYGONS);
+			sprintf(tmp_str, "polys: %03d / %03d", active_polygons + 1, MAX_POLYGONS);
 			
 			nk_layout_row_dynamic(ctx, 20, 3);
 			nk_label(ctx, tmp_str, NK_TEXT_LEFT);
 			nk_spacing(ctx, 1);
 			
 			memset(tmp_str, 0, MAX_STR_LEN);
-			sprintf(tmp_str, "points: %03d / %03d", active_polygons, MAX_POLYGONS);
+			sprintf(tmp_str, "points: %03d / %03d", active_polygons + 1, MAX_POLYGONS);
 			
 			nk_label(ctx, tmp_str, NK_TEXT_RIGHT);
 		}
